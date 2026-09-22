@@ -42,6 +42,6 @@ report_delimiter: ";"
 
 # Compliance: a server is compliant when no automatic service is stopped (the
 # ignore list above applies), no watched service is stopped or missing, the
-# drive has more than this much free space, every configured URL answers 200
+# drive has at least this much free space, every configured URL answers 200
 # with its expected content, and no restart is pending.
 compliance_min_free_gb: 5

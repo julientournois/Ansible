@@ -144,7 +144,7 @@
                and watched_services.result.not_running | int == 0 }}
           enough_free_space: >-
             {{ disk.result.free_gb is defined
-               and disk.result.free_gb | float > compliance_min_free_gb | default(5) | float }}
+               and disk.result.free_gb | float >= compliance_min_free_gb | default(5) | float }}
           all_urls_ok: "{{ url_problems | default([]) | length == 0 }}"
           no_pending_restart: "{{ reboot.reboot_required is defined and not reboot.reboot_required }}"
 

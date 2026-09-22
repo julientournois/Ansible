@@ -211,7 +211,7 @@ URL that never answered shows `no answer` and nothing about the content.
 |---|---|
 | No automatic service stopped | `auto_services_stopped` is empty, after `check_services_ignore` has been applied |
 | No watched service stopped | every name in `check_services` is `Running`; missing counts as stopped |
-| Enough free space | `disk_free_gb` is **strictly above** `compliance_min_free_gb` (5 by default) — 5.0 GB exactly is not compliant |
+| Enough free space | `disk_free_gb` is **at least** `compliance_min_free_gb` (5 by default) — 5.0 GB exactly is compliant |
 | URLs answer | every URL in `check_urls` returned 200, with its `expect_content` present when one is set. No URL configured means nothing to fail |
 | No pending restart | `pending_restart` is `no` |
 
