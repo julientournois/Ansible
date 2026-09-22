@@ -15,11 +15,11 @@ and which one had a problem.
 
 | Item | Task |
 |---|---|
-| Uptime, OS name | `gather_facts` (`ansible_uptime_seconds`, `ansible_distribution`) |
+| Uptime | `gather_facts` (`ansible_uptime_seconds`) |
 | Last reboot time, pending restart (+ reasons) | `win_reboot_info` |
 | Automatic services not running | `win_powershell`, `Win32_Service` |
 | Named services you watch | `win_powershell`, `Get-Service` |
-| `C:` size, free space, free % | `win_powershell`, `Win32_LogicalDisk` |
+| `C:` free space in GB | `win_powershell`, `Win32_LogicalDisk` |
 | URL checks (+ content) | `win_uri`, called from the server |
 
 There is no Windows fact for disk space, which is why the drive goes through
@@ -121,20 +121,59 @@ name, change that one line at the top of the playbook.
 
 ## The CSV
 
-One row per server, 14 columns: `server`, `checked_at`, `os`, `last_boot`,
-`uptime_days`, `pending_restart`, `pending_reasons`,
-`auto_services_stopped_count`, `auto_services_stopped`, `watched_services`,
-`disk_total_gb`, `disk_free_gb`, `disk_free_pct`, `urls`.
+One row per server, 11 columns:
 
-Lists are joined with ` | ` inside one cell, for example
-`Winmgmt=Running | W3SVC=Stopped`.
+| Column | Example |
+|---|---|
+| `server` | `SRV-WEB-01` |
+| `checked_at` | `2026-09-22 08:21` |
+| `last_boot` | `2026-09-22 02:10` |
+| `uptime_days` | `0.2` |
+| `pending_restart` | `yes` |
+| `pending_reasons` | `Component Based Servicing \| Windows Update` |
+| `auto_services_stopped_count` | `2` |
+| `auto_services_stopped` | `Spooler \| MyApp` |
+| `watched_services` | `Winmgmt=Running \| W3SVC=Stopped` |
+| `disk_free_gb` | `61.5` |
+| `urls` | see below |
 
-The delimiter is `;`, which opens cleanly in a French Excel. Change
-`report_delimiter` in `group_vars/all.yml` for `,`.
+Lists are joined with ` | ` inside one cell.
 
-A server that cannot be reached still gets a row, with `not reachable` in the
-`os` column and the rest empty — so it cannot silently disappear from the
-report.
+### Dates
+
+`checked_at` and `last_boot` are both `YYYY-MM-DD HH:MM`, in the **control
+node's timezone** — not each server's. `last_boot` is derived from the epoch
+`win_reboot_info` returns, so both timestamps in a row are in the same
+reference frame and can be compared directly.
+
+### The `urls` column
+
+Each URL takes the form `name (url) status "expected content" verdict`:
+
+```
+intranet (http://srv-web-01/) 200 "Welcome" found
+api (http://srv-web-01/api) 200 "v1.2" MISSING
+ping (http://srv-web-01/ping) 200
+down (https://srv-web-01/x) no answer
+```
+
+The expected string is quoted so you can see what was looked for without
+opening `host_vars`. A URL with no `expect_content` shows only its status. A
+URL that never answered shows `no answer` and nothing about the content.
+
+### Delimiter
+
+`;`, which opens cleanly in a French Excel. Change `report_delimiter` in
+`group_vars/all.yml` for `,`.
+
+### Servers that cannot be reached
+
+They still get a row, so they cannot silently disappear from the report, but
+every column apart from `server` and `checked_at` comes out empty.
+
+An unreachable server therefore looks exactly like one where every check
+failed. If you need to tell the two apart at a glance, say so and a `status`
+column can be added back.
 
 ## Requirements
 

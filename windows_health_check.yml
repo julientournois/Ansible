@@ -59,9 +59,7 @@
               Select-Object -First 1
           if ($disk -and $disk.Size -gt 0) {
               $Ansible.Result = @{
-                  total_gb = [math]::Round($disk.Size / 1GB, 1)
-                  free_gb  = [math]::Round($disk.FreeSpace / 1GB, 1)
-                  free_pct = [math]::Round($disk.FreeSpace / $disk.Size * 100, 1)
+                  free_gb = [math]::Round($disk.FreeSpace / 1GB, 1)
               }
           }
         parameters:
@@ -84,7 +82,7 @@
 
     - name: Turn each URL result into one line
       ansible.builtin.set_fact:
-        url_summary: "{{ url_summary | default([]) + [item.item.name ~ '=' ~ code ~ content_note] }}"
+        url_summary: "{{ url_summary | default([]) + [line] }}"
       loop: "{{ url_checks.results | default([]) }}"
       loop_control:
         label: "{{ item.item.name }}"
@@ -92,11 +90,13 @@
         code: "{{ item.status_code | default('no answer') }}"
         expected: "{{ item.item.expect_content | default('') }}"
         body: "{{ item.content | default('') }}"
+        line: "{{ item.item.name }} ({{ item.item.url }}) {{ code }}{{ content_note }}"
         # Nothing to say about the content when we asked for nothing, or when
         # the server never answered.
         content_note: >-
           {{ '' if not expected or item.status_code is not defined
-             else (' content found' if expected in body else ' content MISSING') }}
+             else (' "' ~ expected ~ '" found' if expected in body
+                   else ' "' ~ expected ~ '" MISSING') }}
 
     - name: Work out the uptime in days
       ansible.builtin.set_fact:
@@ -106,8 +106,9 @@
     - name: Put together this server's line for the report
       ansible.builtin.set_fact:
         report:
-          os: "{{ ansible_distribution | default('not reachable') }}"
-          last_boot: "{{ reboot.last_reboot.time | default('') }}"
+          last_boot: >-
+            {{ '%Y-%m-%d %H:%M' | strftime(reboot.last_reboot.time_epoch | int)
+               if reboot.last_reboot is defined else '' }}
           uptime_days: "{{ uptime_days | default('') }}"
           # Left empty rather than "no" when the check itself failed: an
           # unanswered question must not read as a reassuring answer.
@@ -118,9 +119,7 @@
           auto_stopped_count: "{{ auto_services.output | length if auto_services.output is defined else '' }}"
           auto_stopped: "{{ auto_services.output | default([]) | join(' | ') }}"
           watched_services: "{{ watched_services.output | default([]) | join(' | ') }}"
-          disk_total_gb: "{{ disk.result.total_gb | default('') }}"
           disk_free_gb: "{{ disk.result.free_gb | default('') }}"
-          disk_free_pct: "{{ disk.result.free_pct | default('') }}"
           urls: "{{ url_summary | default([]) | join(' | ') }}"
 
     - name: Show what was found
@@ -144,18 +143,20 @@
     #  finished the tasks above before these run.
     # ------------------------------------------------------------------
 
-    # One single call to `date`, reused everywhere. Asking for the time twice
-    # could give two different answers - a second apart, or a month apart on
-    # the last night of a month.
+    # One single call to `date`, then everything else is derived from it.
+    # Asking for the time twice could give two different answers - a second
+    # apart, or a month apart on the last night of a month.
     - name: Take the timestamp of this run
       run_once: true
       ansible.builtin.set_fact:
-        run_id: "{{ lookup('pipe', 'date +%Y%m%d-%H%M%S') }}"
+        run_epoch: "{{ lookup('pipe', 'date +%s') | int }}"
 
-    - name: Take the YYYY-MM folder from that same timestamp
+    - name: Derive the file name, the folder and the date shown in the report
       run_once: true
       ansible.builtin.set_fact:
-        report_month: "{{ run_id[0:4] }}-{{ run_id[4:6] }}"
+        run_id: "{{ '%Y%m%d-%H%M%S' | strftime(run_epoch) }}"
+        report_month: "{{ '%Y-%m' | strftime(run_epoch) }}"
+        checked_at: "{{ '%Y-%m-%d %H:%M' | strftime(run_epoch) }}"
 
     - name: Create reports/YYYY-MM/
       run_once: true
