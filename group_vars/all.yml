@@ -17,6 +17,20 @@ check_drive: "C:"
 check_services: []
 check_urls: []
 
+# Services left out of the "automatic but not running" list. Matched on the
+# service NAME - the one the report prints - with * as a wildcard.
+#
+# These are the usual suspects: updaters that only run on demand, and the
+# per-user services whose name ends in a random suffix. Trim or extend it from
+# what you actually see in the auto_services_stopped column; this list is a
+# starting point, not a verified truth about your own servers.
+check_services_ignore:
+  - "edgeupdate*"          # Microsoft Edge updater, started on demand
+  - "gupdate*"             # Google updater, started on demand
+  - "CDPUserSvc_*"         # per-user service, random suffix
+  - "OneSyncSvc_*"         # per-user service, random suffix
+  - "WpnUserService_*"     # per-user service, random suffix
+
 check_url_timeout: 15
 # Internal sites often use self-signed certificates.
 check_url_ignore_cert_errors: true

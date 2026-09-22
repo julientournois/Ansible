@@ -17,7 +17,7 @@ and which one had a problem.
 |---|---|
 | Uptime | `gather_facts` (`ansible_uptime_seconds`) |
 | Last reboot time, pending restart (+ reasons) | `win_reboot_info` |
-| Automatic services not running | `win_powershell`, `Win32_Service` |
+| Automatic services not running, minus the ones you exclude | `win_powershell`, `Win32_Service` |
 | Named services you watch | `win_powershell`, `Get-Service` |
 | `C:` free space in GB | `win_powershell`, `Win32_LogicalDisk` |
 | URL checks (+ content) | `win_uri`, called from the server |
@@ -83,6 +83,9 @@ check_services:            # checked by name, whatever their start mode
   - Winmgmt
   - W3SVC
 
+check_services_ignore:     # left out of the "automatic but not running" list
+  - "MyNoisyService*"
+
 check_urls:                # called from the server itself
   - name: intranet
     url: "http://{{ inventory_hostname | lower }}/"
@@ -108,6 +111,30 @@ happening.
 A `default()` is only a fallback for a name that is undefined. It has no
 precedence and never overrides a value you set in `group_vars` or
 `host_vars`.
+
+### Excluding noisy services
+
+Plenty of services are set to start automatically yet are legitimately stopped
+most of the time — updaters that only run on demand, and the per-user services
+whose name ends in a random suffix. `check_services_ignore` keeps them out of
+the `auto_services_stopped` column.
+
+Patterns are matched on the service **name**, the one the report prints, with
+`*` as a wildcard:
+
+```yaml
+check_services_ignore:
+  - "edgeupdate*"          # covers edgeupdate and edgeupdatem
+  - "CDPUserSvc_*"         # per-user service, random suffix
+```
+
+`group_vars/all.yml` ships a short starting list. It is a guess at the usual
+noise, not a verified truth about your servers: build the real one from what
+you actually see in the `auto_services_stopped` column, since that column
+prints exactly the names the patterns are matched against.
+
+Setting it per server works too, in `host_vars`, when one machine has its own
+noise.
 
 `check_url_ignore_cert_errors: true` is on by default, because internal sites
 commonly use self-signed certificates. Set it to `false` if you want

@@ -34,10 +34,19 @@
     - name: List the automatic services that are not running
       ansible.windows.win_powershell:
         script: |
+          param([string[]]$Ignore)
           $Ansible.Changed = $false
           Get-CimInstance Win32_Service |
               Where-Object { $_.StartMode -eq 'Auto' -and $_.State -ne 'Running' } |
+              Where-Object {
+                  # Kept unless its name matches one of the ignore patterns.
+                  # -like, so 'edgeupdate*' covers edgeupdate and edgeupdatem.
+                  $name = $_.Name
+                  -not ($Ignore | Where-Object { $name -like $_ })
+              } |
               Select-Object -ExpandProperty Name
+        parameters:
+          Ignore: "{{ check_services_ignore | default([]) }}"
       register: auto_services
       failed_when: false
 
