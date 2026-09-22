@@ -1,5 +1,5 @@
 {#- One row per server. Values are reported as they are, nothing is graded. -#}
-{%- set d = report_delimiter -%}
+{%- set d = report_delimiter | default(';') -%}
 {#- Wrap every field in quotes and double any quote inside it (RFC 4180). -#}
 {%- macro cell(value) -%}
 "{{ value | string | replace('"', '""') }}"

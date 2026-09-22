@@ -91,11 +91,20 @@ defaults: `check_drive`, `check_url_timeout`,
 `check_url_ignore_cert_errors`, `report_delimiter`, and empty
 `check_services` / `check_urls`.
 
-**Those empty defaults are load-bearing.** A server with no `host_vars` file
-still runs and simply reports nothing for those two. Without them the task
-fails on `check_services is undefined`, and `failed_when: false` does *not*
-catch that — a missing variable breaks the task before the module runs, the
-server drops out of the play and you lose its whole row.
+`group_vars/all.yml` is a convenience, not a requirement: the playbook reads
+every setting through a `| default(...)`, so it runs even with no
+`group_vars` and no `host_vars` at all. A server you configure nothing for
+simply reports nothing for the services and the URLs.
+
+That matters because a missing variable is **not** caught by
+`failed_when: false`: it breaks the task while its arguments are being
+resolved, before the module runs, so the server drops out of the play and
+loses its whole row. The defaults in the playbook stop that from ever
+happening.
+
+A `default()` is only a fallback for a name that is undefined. It has no
+precedence and never overrides a value you set in `group_vars` or
+`host_vars`.
 
 `check_url_ignore_cert_errors: true` is on by default, because internal sites
 commonly use self-signed certificates. Set it to `false` if you want

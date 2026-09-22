@@ -19,6 +19,12 @@
     # A failing check should not cost us the other ones, so each gathering
     # task is allowed to fail. The empty columns in the CSV are the signal,
     # and the red task in the output tells you which check it was.
+    #
+    # Every setting is read with a | default(...) so the playbook runs on its
+    # own, even with no group_vars/host_vars at all. A default() is only a
+    # fallback for an undefined name: it has no precedence and never overrides
+    # a value you set anywhere. Putting these defaults in the play's vars:
+    # block instead would sit ABOVE host_vars and silently override it.
 
     - name: Check the last reboot and whether a restart is pending
       ansible.windows.win_reboot_info:
@@ -45,11 +51,11 @@
               if ($service) { "$name=$($service.Status)" } else { "$name=not installed" }
           }
         parameters:
-          Names: "{{ check_services }}"
+          Names: "{{ check_services | default([]) }}"
       register: watched_services
       failed_when: false
 
-    - name: Check the drive {{ check_drive }}
+    - name: Check the drive {{ check_drive | default('C:') }}
       ansible.windows.win_powershell:
         script: |
           param([string]$Drive)
@@ -63,7 +69,7 @@
               }
           }
         parameters:
-          Drive: "{{ check_drive }}"
+          Drive: "{{ check_drive | default('C:') }}"
       register: disk
       failed_when: false
 
@@ -71,9 +77,9 @@
       ansible.windows.win_uri:
         url: "{{ item.url }}"
         return_content: true
-        validate_certs: "{{ not check_url_ignore_cert_errors }}"
-        timeout: "{{ check_url_timeout }}"
-      loop: "{{ check_urls }}"
+        validate_certs: "{{ not (check_url_ignore_cert_errors | default(true) | bool) }}"
+        timeout: "{{ check_url_timeout | default(15) }}"
+      loop: "{{ check_urls | default([]) }}"
       loop_control:
         label: "{{ item.name }}"
       register: url_checks
@@ -134,7 +140,7 @@
           | booted {{ report.last_boot | default('?') }}
           | up {{ report.uptime_days | default('?') }} days
           | restart pending: {{ report.pending_restart }}
-          | {{ check_drive }} free: {{ report.disk_free_gb }} GB
+          | {{ check_drive | default('C:') }} free: {{ report.disk_free_gb }} GB
           | auto services stopped: {{ report.auto_stopped_count }}
           | {{ report.watched_services }}
           | {{ report.urls }}
