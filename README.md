@@ -28,10 +28,17 @@ PowerShell like the rest.
 
 ```
 windows_health_check.yml     the playbook
-templates/checks.ps1.j2      the PowerShell run on each server
+files/checks.ps1             the PowerShell run on each server
 templates/report.csv.j2      the CSV layout
 group_vars/windows.yml       what to watch: services, URLs, drive
 ```
+
+`files/checks.ps1` is a plain PowerShell script, not a template. The playbook
+runs it with `ansible.windows.win_powershell`, which hands your settings to
+its `param()` block as real parameters and reads the result back from
+`$Ansible.Result`. Nothing is pasted into the script text, so no value ever
+needs escaping, and the file stays a normal `.ps1` you can open, edit and run
+in a PowerShell console on its own.
 
 Your own `ansible.cfg` and your inventory `.ini` stay where they are. The
 playbook only expects a group of Windows servers.
@@ -97,6 +104,6 @@ report.
 
 ## Requirements
 
-- the `ansible.windows` collection
+- the `ansible.windows` collection (1.5.0 or newer, for `win_powershell`)
 - SSH or WinRM already working against the servers (this playbook does not
   configure the connection — that stays in your inventory)

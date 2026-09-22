@@ -15,15 +15,24 @@
 
   tasks:
 
+    # files/checks.ps1 is a plain PowerShell script. Values are handed to it
+    # as real parameters, never pasted into the script text, so nothing needs
+    # escaping. It returns its result through $Ansible.Result.
     - name: Run the PowerShell checks
-      ansible.windows.win_shell: "{{ lookup('template', 'checks.ps1.j2') }}"
-      register: powershell_output
-      changed_when: false
+      ansible.windows.win_powershell:
+        path: checks.ps1
+        parameters:
+          Drive: "{{ check_drive }}"
+          Services: "{{ check_services }}"
+          Urls: "{{ check_urls }}"
+          TimeoutSec: "{{ check_url_timeout | int }}"
+          IgnoreCertErrors: "{{ check_url_ignore_cert_errors | bool }}"
+      register: checks_raw
 
-    - name: Read the JSON returned by PowerShell
+    - name: Read the result
       ansible.builtin.set_fact:
-        checks: "{{ powershell_output.stdout | from_json }}"
-      when: powershell_output.stdout is defined
+        checks: "{{ checks_raw.result }}"
+      when: checks_raw.result is defined
 
     - name: Work out the uptime in days
       ansible.builtin.set_fact:
