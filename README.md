@@ -35,7 +35,8 @@ report never fills a blank with a reassuring `no` or `0`.
 ```
 windows_health_check.yml     the playbook, everything is in here
 templates/report.csv.j2      the CSV layout
-group_vars/windows.yml       what to watch: services, URLs, drive
+group_vars/all.yml           defaults for every server
+host_vars/<SERVER>.yml       what that one server watches: services, URLs
 ```
 
 The PowerShell is inline in the tasks, and values reach it through
@@ -56,19 +57,25 @@ ansible-playbook -i /path/to/your/inventory.ini windows_health_check.yml
 The report lands in `reports/YYYY-MM/health_YYYYMMDD-HHMMSS.csv`, next to the
 playbook.
 
-Run it **from this directory**. `group_vars/windows.yml` is picked up because
-it sits next to the playbook; if you run the playbook from somewhere else,
-Ansible will not find it and the run stops on `check_drive is undefined`. The
-other option is to put `group_vars/` next to your inventory file instead —
-either location works, just not a copy in both.
+Run it **from this directory**. `group_vars/` and `host_vars/` are picked up
+because they sit next to the playbook; if you run the playbook from somewhere
+else, Ansible will not find them and the run stops on `check_drive is
+undefined`. The other option is to put both folders next to your inventory
+file instead — either location works, just not a copy in both.
 
 ## Settings
 
-Everything you are likely to change is in `group_vars/windows.yml`:
+Configuration is **per server**. Create one file per server under
+`host_vars/`, named exactly like the server in your inventory:
+
+```
+host_vars/
+  SRV-WEB-01.yml
+  SRV-SQL-01.yml
+```
 
 ```yaml
-check_drive: "C:"
-
+# host_vars/SRV-WEB-01.yml
 check_services:            # checked by name, whatever their start mode
   - Winmgmt
   - W3SVC
@@ -79,13 +86,37 @@ check_urls:                # called from the server itself
     expect_content: "Welcome"   # optional
 ```
 
-The file is named after the inventory group. If your group is not called
-`windows`, rename it (`group_vars/<your group>.yml`) and change the `hosts:`
-line at the top of the playbook to match.
+Anything you leave out falls back to `group_vars/all.yml`, which holds the
+defaults: `check_drive`, `check_url_timeout`,
+`check_url_ignore_cert_errors`, and empty `check_services` / `check_urls`.
+
+**Those empty defaults are load-bearing.** A server with no `host_vars` file
+still runs and simply reports nothing for those two. Without them the task
+fails on `check_services is undefined`, and `failed_when: false` does *not*
+catch that — a missing variable breaks the task before the module runs, the
+server drops out of the play and you lose its whole row.
 
 `check_url_ignore_cert_errors: true` is on by default, because internal sites
 commonly use self-signed certificates. Set it to `false` if you want
 certificate errors to show up as failed URL checks.
+
+### Where the defaults must live
+
+`group_vars/all.yml` is read with a **lower** priority than
+`group_vars/<group>.yml` and `host_vars/<server>.yml`, so per-server settings
+always win.
+
+Do not move the defaults into the playbook's own `vars:` block. That has a
+**higher** priority than `host_vars`, so every per-server setting would be
+silently overridden.
+
+If some servers do share settings, a `group_vars/<group>.yml` still works and
+sits between the two — you can mix both without changing the playbook.
+
+### Group name
+
+The playbook targets `hosts: windows`. If your inventory group has another
+name, change that one line at the top of the playbook.
 
 ## The CSV
 

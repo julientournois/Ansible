@@ -1,0 +1,22 @@
+---
+# Defaults for every server.
+#
+# They live in group_vars/all.yml, which Ansible reads with a LOWER priority
+# than group_vars/<group>.yml and host_vars/<server>.yml. Anything you set for
+# one server therefore wins over what is here.
+#
+# Do not move these into the playbook's own `vars:` block: that has a HIGHER
+# priority than host_vars, so it would silently override your per-server
+# settings.
+
+# Drive to report on.
+check_drive: "C:"
+
+# Empty by default, so a server with no host_vars file of its own still runs -
+# it simply reports nothing for these two.
+check_services: []
+check_urls: []
+
+check_url_timeout: 15
+# Internal sites often use self-signed certificates.
+check_url_ignore_cert_errors: true

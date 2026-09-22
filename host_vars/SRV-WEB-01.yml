@@ -1,20 +1,16 @@
 ---
-# Settings for the health check. This file is read automatically for every
-# host in the [windows] group of your inventory - your .ini file stays as it
-# is, it only needs to contain the servers.
+# Settings for one server. The file name must match the name used in your
+# inventory, exactly. Copy this file for each server you want to configure.
 #
-# Rename it to match your own group name if it is not "windows".
-
-# Drive to report on.
-check_drive: "C:"
+# Anything you leave out falls back to group_vars/all.yml.
 
 # Services checked by name, on top of the "automatic but not running" list.
 check_services:
   - Winmgmt
-  - Schedule
   - W3SVC
+  - MSDTC
 
-# URLs tested from the server itself.
+# URLs called from this server.
 #   name:           short label shown in the report
 #   url:            address to call
 #   expect_content: optional, text that must appear in the page
@@ -25,7 +21,3 @@ check_urls:
 
   - name: healthcheck
     url: "http://{{ inventory_hostname | lower }}/health"
-
-check_url_timeout: 15
-# Internal sites often use self-signed certificates.
-check_url_ignore_cert_errors: true
