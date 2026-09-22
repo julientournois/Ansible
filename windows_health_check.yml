@@ -55,10 +55,20 @@
         script: |
           param([string[]]$Names)
           $Ansible.Changed = $false
+          # The strings are what the report prints; not_running is what the
+          # compliance rule reads, so nothing has to parse them back.
+          $notRunning = 0
           foreach ($name in $Names) {
               $service = Get-Service -Name $name -ErrorAction SilentlyContinue
-              if ($service) { "$name=$($service.Status)" } else { "$name=not installed" }
+              if ($service) {
+                  if ($service.Status -ne 'Running') { $notRunning++ }
+                  "$name=$($service.Status)"
+              } else {
+                  $notRunning++
+                  "$name=not installed"
+              }
           }
+          $Ansible.Result = @{ not_running = $notRunning }
         parameters:
           Names: "{{ check_services | default([]) }}"
       register: watched_services
@@ -98,6 +108,7 @@
     - name: Turn each URL result into one line
       ansible.builtin.set_fact:
         url_summary: "{{ url_summary | default([]) + [line] }}"
+        url_problems: "{{ url_problems | default([]) + ([item.item.name] if not url_ok else []) }}"
       loop: "{{ url_checks.results | default([]) }}"
       loop_control:
         label: "{{ item.item.name }}"
@@ -106,6 +117,9 @@
         expected: "{{ item.item.expect_content | default('') }}"
         body: "{{ item.content | default('') }}"
         line: "{{ item.item.name }} ({{ item.item.url }}) {{ code }}{{ content_note }}"
+        # The endpoint works: it answered 200 and, when one was asked for, the
+        # expected text is there.
+        url_ok: "{{ (item.status_code | default(0)) == 200 and (not expected or expected in body) }}"
         # Nothing to say about the content when we asked for nothing, or when
         # the server never answered.
         content_note: >-
@@ -118,9 +132,26 @@
         uptime_days: "{{ (ansible_uptime_seconds | int / 86400) | round(1) }}"
       when: ansible_uptime_seconds is defined
 
+    # Compliance fails closed: a rule whose data is missing counts as not met,
+    # because a check that did not run proves nothing. A server that is not
+    # reachable, or whose disk check went red, therefore reads "no".
+    - name: Work out whether the server is compliant
+      ansible.builtin.set_fact:
+        compliance_rules:
+          no_auto_service_stopped: "{{ auto_services.output is defined and auto_services.output | length == 0 }}"
+          no_watched_service_stopped: >-
+            {{ watched_services.result.not_running is defined
+               and watched_services.result.not_running | int == 0 }}
+          enough_free_space: >-
+            {{ disk.result.free_gb is defined
+               and disk.result.free_gb | float > compliance_min_free_gb | default(5) | float }}
+          all_urls_ok: "{{ url_problems | default([]) | length == 0 }}"
+          no_pending_restart: "{{ reboot.reboot_required is defined and not reboot.reboot_required }}"
+
     - name: Put together this server's line for the report
       ansible.builtin.set_fact:
         report:
+          compliance: "{{ 'yes' if false not in compliance_rules.values() | list else 'no' }}"
           # Tells an unreachable server apart from one that answered but whose
           # checks all failed - both otherwise leave every column empty.
           # reboot.unreachable rather than a test on the facts, so a connection
@@ -145,7 +176,7 @@
     - name: Show what was found
       ansible.builtin.debug:
         msg: >-
-          {{ inventory_hostname }} [{{ report.status }}]
+          {{ inventory_hostname }} [{{ report.status }}] compliant={{ report.compliance }}
           | booted {{ report.last_boot | default('?') }}
           | up {{ report.uptime_days | default('?') }} days
           | restart pending: {{ report.pending_restart }}

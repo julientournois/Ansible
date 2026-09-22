@@ -3,8 +3,9 @@
 A small Ansible playbook that collects information from each Windows server
 after updates and writes one CSV report.
 
-It is **informative only**: no thresholds, no pass/fail. It reports what it
-finds and leaves the judgement to you.
+Most of it is **informative**: the columns report what was found and leave the
+judgement to you. One column, `compliance`, is the exception — see
+[Compliance](#compliance).
 
 Nothing is changed on the servers.
 
@@ -160,12 +161,13 @@ name, change that one line at the top of the playbook.
 
 ## The CSV
 
-One row per server, 12 columns:
+One row per server, 13 columns:
 
 | Column | Example |
 |---|---|
 | `server` | `SRV-WEB-01` |
 | `status` | `reachable` or `not reachable` |
+| `compliance` | `yes` or `no`, see below |
 | `checked_at` | `2026-09-22 08:21` |
 | `last_boot` | `2026-09-22 02:10` |
 | `uptime_days` | `0.2` |
@@ -200,6 +202,30 @@ down (https://srv-web-01/x) no answer
 The expected string is quoted so you can see what was looked for without
 opening `host_vars`. A URL with no `expect_content` shows only its status. A
 URL that never answered shows `no answer` and nothing about the content.
+
+### Compliance
+
+`compliance` is `yes` only when **all five** of these hold:
+
+| Rule | Met when |
+|---|---|
+| No automatic service stopped | `auto_services_stopped` is empty, after `check_services_ignore` has been applied |
+| No watched service stopped | every name in `check_services` is `Running`; missing counts as stopped |
+| Enough free space | `disk_free_gb` is **strictly above** `compliance_min_free_gb` (5 by default) — 5.0 GB exactly is not compliant |
+| URLs answer | every URL in `check_urls` returned 200, with its `expect_content` present when one is set. No URL configured means nothing to fail |
+| No pending restart | `pending_restart` is `no` |
+
+Change the threshold with `compliance_min_free_gb` in `group_vars/all.yml`, or
+per server in `host_vars`.
+
+**It fails closed.** A rule whose data is missing counts as not met, so a
+server that is not reachable, or whose disk check went red, reads `no`. A
+check that did not run proves nothing, and on a post-update report an
+unverified server is exactly the one worth opening.
+
+The consequence is that `no` alone does not tell you what is wrong. The other
+columns do: an empty one says the check did not run, a filled one says what it
+found.
 
 ### Reading an empty cell
 

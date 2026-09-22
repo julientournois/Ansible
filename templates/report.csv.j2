@@ -4,8 +4,8 @@
 {%- macro cell(value) -%}
 "{{ value | string | replace('"', '""') }}"
 {%- endmacro -%}
-server{{ d }}status{{ d }}checked_at{{ d }}last_boot{{ d }}uptime_days{{ d }}pending_restart{{ d }}pending_reasons{{ d }}auto_services_stopped_count{{ d }}auto_services_stopped{{ d }}watched_services{{ d }}disk_free_gb{{ d }}urls
+server{{ d }}status{{ d }}compliance{{ d }}checked_at{{ d }}last_boot{{ d }}uptime_days{{ d }}pending_restart{{ d }}pending_reasons{{ d }}auto_services_stopped_count{{ d }}auto_services_stopped{{ d }}watched_services{{ d }}disk_free_gb{{ d }}urls
 {% for host in ansible_play_hosts_all | sort %}
 {%- set r = hostvars[host].report | default({}) -%}
-{{ cell(host) }}{{ d }}{{ cell(r.status | default('not reachable')) }}{{ d }}{{ cell(checked_at) }}{{ d }}{{ cell(r.last_boot | default('')) }}{{ d }}{{ cell(r.uptime_days | default('')) }}{{ d }}{{ cell(r.pending_restart | default('')) }}{{ d }}{{ cell(r.pending_reasons | default('')) }}{{ d }}{{ cell(r.auto_stopped_count | default('')) }}{{ d }}{{ cell(r.auto_stopped | default('')) }}{{ d }}{{ cell(r.watched_services | default('')) }}{{ d }}{{ cell(r.disk_free_gb | default('')) }}{{ d }}{{ cell(r.urls | default('')) }}
+{{ cell(host) }}{{ d }}{{ cell(r.status | default('not reachable')) }}{{ d }}{{ cell(r.compliance | default('no')) }}{{ d }}{{ cell(checked_at) }}{{ d }}{{ cell(r.last_boot | default('')) }}{{ d }}{{ cell(r.uptime_days | default('')) }}{{ d }}{{ cell(r.pending_restart | default('')) }}{{ d }}{{ cell(r.pending_reasons | default('')) }}{{ d }}{{ cell(r.auto_stopped_count | default('')) }}{{ d }}{{ cell(r.auto_stopped | default('')) }}{{ d }}{{ cell(r.watched_services | default('')) }}{{ d }}{{ cell(r.disk_free_gb | default('')) }}{{ d }}{{ cell(r.urls | default('')) }}
 {% endfor %}
