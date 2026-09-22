@@ -106,6 +106,11 @@
     - name: Put together this server's line for the report
       ansible.builtin.set_fact:
         report:
+          # Tells an unreachable server apart from one that answered but whose
+          # checks all failed - both otherwise leave every column empty.
+          # reboot.unreachable rather than a test on the facts, so a connection
+          # that drops after gather_facts is still caught.
+          status: "{{ 'not reachable' if reboot.unreachable | default(false) else 'reachable' }}"
           last_boot: >-
             {{ '%Y-%m-%d %H:%M' | strftime(reboot.last_reboot.time_epoch | int)
                if reboot.last_reboot is defined else '' }}
@@ -125,7 +130,7 @@
     - name: Show what was found
       ansible.builtin.debug:
         msg: >-
-          {{ inventory_hostname }}
+          {{ inventory_hostname }} [{{ report.status }}]
           | booted {{ report.last_boot | default('?') }}
           | up {{ report.uptime_days | default('?') }} days
           | restart pending: {{ report.pending_restart }}

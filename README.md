@@ -121,11 +121,12 @@ name, change that one line at the top of the playbook.
 
 ## The CSV
 
-One row per server, 11 columns:
+One row per server, 12 columns:
 
 | Column | Example |
 |---|---|
 | `server` | `SRV-WEB-01` |
+| `status` | `reachable` or `not reachable` |
 | `checked_at` | `2026-09-22 08:21` |
 | `last_boot` | `2026-09-22 02:10` |
 | `uptime_days` | `0.2` |
@@ -169,11 +170,18 @@ URL that never answered shows `no answer` and nothing about the content.
 ### Servers that cannot be reached
 
 They still get a row, so they cannot silently disappear from the report, but
-every column apart from `server` and `checked_at` comes out empty.
+every column apart from `server`, `status` and `checked_at` comes out empty.
 
-An unreachable server therefore looks exactly like one where every check
-failed. If you need to tell the two apart at a glance, say so and a `status`
-column can be added back.
+`status` is what tells them apart from a server that answered and whose checks
+all failed — both otherwise leave the same empty columns:
+
+| `status` | Meaning |
+|---|---|
+| `reachable` | the server answered; an empty column means that one check failed |
+| `not reachable` | no connection at all; every empty column simply means nothing was collected |
+
+`reachable` says the connection worked, nothing more. It is not a verdict on
+the server's health.
 
 ## Requirements
 
