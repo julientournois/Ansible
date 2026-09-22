@@ -161,13 +161,14 @@ name, change that one line at the top of the playbook.
 
 ## The CSV
 
-One row per server, 13 columns:
+One row per server, 14 columns:
 
 | Column | Example |
 |---|---|
 | `server` | `SRV-WEB-01` |
 | `status` | `reachable` or `not reachable` |
 | `compliance` | `yes` or `no`, see below |
+| `compliance_reasons` | why it is `no`, empty when `yes` |
 | `checked_at` | `2026-09-22 08:21` |
 | `last_boot` | `2026-09-22 02:10` |
 | `uptime_days` | `0.2` |
@@ -223,9 +224,31 @@ server that is not reachable, or whose disk check went red, reads `no`. A
 check that did not run proves nothing, and on a post-update report an
 unverified server is exactly the one worth opening.
 
-The consequence is that `no` alone does not tell you what is wrong. The other
-columns do: an empty one says the check did not run, a filled one says what it
-found.
+`compliance_reasons` says which rules were not met, joined with ` | `. It is
+empty when the server is compliant.
+
+A rule that failed because it was **violated** and one that failed because it
+could not be **evaluated** read differently, so the column never claims
+something it did not see:
+
+| Reason | Meaning |
+|---|---|
+| `automatic service stopped` | at least one is stopped |
+| `automatic services not checked` | that task did not run |
+| `watched service stopped` | one is stopped or missing |
+| `watched services not checked` | that task did not run |
+| `free space below 5 GB` | measured, and under the floor |
+| `disk not checked` | that task did not run |
+| `URL failing` | at least one URL did not answer 200, or its expected content was missing |
+| `URLs not checked` | URLs are configured but the check did not run |
+| `restart pending` | a restart is pending |
+| `restart pending not checked` | that task did not run |
+
+A server with no URL configured has nothing to fail, so it stays compliant on
+that rule.
+
+The reasons stay categorical: which service, which URL and how much space is
+left are already in their own columns.
 
 ### Reading an empty cell
 

@@ -133,25 +133,45 @@
       when: ansible_uptime_seconds is defined
 
     # Compliance fails closed: a rule whose data is missing counts as not met,
-    # because a check that did not run proves nothing. A server that is not
-    # reachable, or whose disk check went red, therefore reads "no".
-    - name: Work out whether the server is compliant
+    # because a check that did not run proves nothing. Each rule yields either
+    # an empty string when it is met, or a short reason why it is not - and a
+    # rule that could not be evaluated says so, rather than claiming the
+    # condition was violated.
+    - name: Work out why the server would not be compliant
       ansible.builtin.set_fact:
-        compliance_rules:
-          no_auto_service_stopped: "{{ auto_services.output is defined and auto_services.output | length == 0 }}"
-          no_watched_service_stopped: >-
-            {{ watched_services.result.not_running is defined
-               and watched_services.result.not_running | int == 0 }}
-          enough_free_space: >-
-            {{ disk.result.free_gb is defined
-               and disk.result.free_gb | float >= compliance_min_free_gb | default(5) | float }}
-          all_urls_ok: "{{ url_problems | default([]) | length == 0 }}"
-          no_pending_restart: "{{ reboot.reboot_required is defined and not reboot.reboot_required }}"
+        compliance_problems: "{{ problems | reject('equalto', '') | list }}"
+      vars:
+        auto_problem: >-
+          {{ 'automatic services not checked' if auto_services.output is not defined
+             else ('automatic service stopped' if auto_services.output | length > 0 else '') }}
+        watched_problem: >-
+          {{ 'watched services not checked' if watched_services.result.not_running is not defined
+             else ('watched service stopped' if watched_services.result.not_running | int > 0 else '') }}
+        disk_problem: >-
+          {{ 'disk not checked' if disk.result.free_gb is not defined
+             else ('free space below ' ~ (compliance_min_free_gb | default(5)) ~ ' GB'
+                   if disk.result.free_gb | float < compliance_min_free_gb | default(5) | float
+                   else '') }}
+        # A server with no URL configured has nothing to fail. One that has
+        # URLs but never ran the check is unknown, not fine.
+        url_problem: >-
+          {{ 'URLs not checked' if check_urls | default([]) | length > 0 and url_summary is not defined
+             else ('URL failing' if url_problems | default([]) | length > 0 else '') }}
+        reboot_problem: >-
+          {{ 'restart pending not checked' if reboot.reboot_required is not defined
+             else ('restart pending' if reboot.reboot_required else '') }}
+        problems:
+          - "{{ auto_problem }}"
+          - "{{ watched_problem }}"
+          - "{{ disk_problem }}"
+          - "{{ url_problem }}"
+          - "{{ reboot_problem }}"
 
     - name: Put together this server's line for the report
       ansible.builtin.set_fact:
         report:
-          compliance: "{{ 'yes' if false not in compliance_rules.values() | list else 'no' }}"
+          compliance: "{{ 'yes' if compliance_problems | length == 0 else 'no' }}"
+          compliance_reasons: "{{ compliance_problems | join(' | ') }}"
           # Tells an unreachable server apart from one that answered but whose
           # checks all failed - both otherwise leave every column empty.
           # reboot.unreachable rather than a test on the facts, so a connection
@@ -176,7 +196,9 @@
     - name: Show what was found
       ansible.builtin.debug:
         msg: >-
-          {{ inventory_hostname }} [{{ report.status }}] compliant={{ report.compliance }}
+          {{ inventory_hostname }} [{{ report.status }}]
+          compliant={{ report.compliance }}
+          {{ '(' ~ report.compliance_reasons ~ ')' if report.compliance_reasons else '' }}
           | booted {{ report.last_boot | default('?') }}
           | up {{ report.uptime_days | default('?') }} days
           | restart pending: {{ report.pending_restart }}
