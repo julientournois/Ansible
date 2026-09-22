@@ -27,8 +27,11 @@ There is no Windows fact for disk space, which is why the drive goes through
 
 Each gathering task carries `failed_when: false`. A check that fails costs you
 that one column, not the whole server: the task shows up red in the output and
-the column comes out **empty** in the CSV. Empty means "not checked" — the
-report never fills a blank with a reassuring `no` or `0`.
+the column comes out **empty** in the CSV. The report never fills such a blank
+with a reassuring `no` or `0`.
+
+An empty cell therefore means "nothing to report here", which covers two very
+different situations — see [Reading an empty cell](#reading-an-empty-cell).
 
 ## Files
 
@@ -170,6 +173,27 @@ down (https://srv-web-01/x) no answer
 The expected string is quoted so you can see what was looked for without
 opening `host_vars`. A URL with no `expect_content` shows only its status. A
 URL that never answered shows `no answer` and nothing about the content.
+
+### Reading an empty cell
+
+Two columns are empty because there is **nothing to check**, which is a
+perfectly normal state:
+
+| Column | Empty means |
+|---|---|
+| `urls` | no `check_urls` for this server. An application server with no web front end has nothing to call, and that is not a problem |
+| `watched_services` | no `check_services` for this server |
+
+The run says so out loud: with nothing configured, the matching tasks appear
+as `skipping:` in the output rather than running and finding nothing.
+
+Every other column is empty because **that check did not run or failed**:
+either the server was not reachable at all (`status`), or that one task went
+red in the output. Those are worth looking at.
+
+A URL that was called and failed is never blank — it shows `no answer` or a
+status code. So on a `reachable` server, an empty `urls` cell always means
+"no endpoint declared", never "the endpoint is down".
 
 ### Delimiter
 
