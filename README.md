@@ -33,7 +33,7 @@ report never fills a blank with a reassuring `no` or `0`.
 ## Files
 
 ```
-windows_health_check.yml     the playbook, everything is in here
+windows_health_check.yml     one play: the checks, then the report
 templates/report.csv.j2      the CSV layout
 group_vars/all.yml           defaults for every server
 host_vars/<SERVER>.yml       what that one server watches: services, URLs
@@ -88,7 +88,8 @@ check_urls:                # called from the server itself
 
 Anything you leave out falls back to `group_vars/all.yml`, which holds the
 defaults: `check_drive`, `check_url_timeout`,
-`check_url_ignore_cert_errors`, and empty `check_services` / `check_urls`.
+`check_url_ignore_cert_errors`, `report_delimiter`, and empty
+`check_services` / `check_urls`.
 
 **Those empty defaults are load-bearing.** A server with no `host_vars` file
 still runs and simply reports nothing for those two. Without them the task
@@ -129,7 +130,7 @@ Lists are joined with ` | ` inside one cell, for example
 `Winmgmt=Running | W3SVC=Stopped`.
 
 The delimiter is `;`, which opens cleanly in a French Excel. Change
-`report_delimiter` in the second play for `,`.
+`report_delimiter` in `group_vars/all.yml` for `,`.
 
 A server that cannot be reached still gets a row, with `not reachable` in the
 `os` column and the rest empty — so it cannot silently disappear from the

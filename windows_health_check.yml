@@ -9,7 +9,7 @@
 #  The report is informative, it does not decide what is good or bad.
 # ============================================================================
 
-- name: Collect health information from each server
+- name: Check the Windows servers and write the report
   hosts: windows
   gather_facts: true            # gives ansible_distribution and ansible_uptime_seconds
   ignore_unreachable: true      # a server that is down still gets a row in the CSV
@@ -135,13 +135,14 @@
           | {{ report.watched_services }}
           | {{ report.urls }}
 
-- name: Write the CSV report
-  hosts: windows
-  gather_facts: false
-  vars:
-    report_delimiter: ";"       # ';' opens cleanly in a French Excel, ',' is RFC 4180
-
-  tasks:
+    # ------------------------------------------------------------------
+    #  The report, written once on the control node.
+    #
+    #  These tasks live in the same play as the checks on purpose: a second
+    #  play would mean repeating the `hosts:` line, and having to change the
+    #  group name in two places. With the linear strategy every host has
+    #  finished the tasks above before these run.
+    # ------------------------------------------------------------------
 
     # One single call to `date`, reused everywhere. Asking for the time twice
     # could give two different answers - a second apart, or a month apart on

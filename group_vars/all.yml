@@ -20,3 +20,8 @@ check_urls: []
 check_url_timeout: 15
 # Internal sites often use self-signed certificates.
 check_url_ignore_cert_errors: true
+
+# CSV delimiter. ';' opens cleanly in a French Excel, ',' is RFC 4180.
+# It lives here rather than in the playbook's vars: block, so that it stays
+# overridable per group, per server and with -e.
+report_delimiter: ";"
