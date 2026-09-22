@@ -1,0 +1,85 @@
+---
+# ============================================================================
+#  Post-update health check for Windows servers.
+#
+#    ansible-playbook -i inventory.ini windows_health_check.yml
+#
+#  Read-only: nothing is changed on the servers. The report is informative,
+#  it does not decide whether a value is good or bad.
+# ============================================================================
+
+- name: Collect health information from each server
+  hosts: windows
+  gather_facts: true            # gives ansible_lastboot and ansible_uptime_seconds
+  ignore_unreachable: true      # a server that is down still gets a row in the CSV
+
+  tasks:
+
+    - name: Run the PowerShell checks
+      ansible.windows.win_shell: "{{ lookup('template', 'checks.ps1.j2') }}"
+      register: powershell_output
+      changed_when: false
+
+    - name: Read the JSON returned by PowerShell
+      ansible.builtin.set_fact:
+        checks: "{{ powershell_output.stdout | from_json }}"
+      when: powershell_output.stdout is defined
+
+    - name: Work out the uptime in days
+      ansible.builtin.set_fact:
+        uptime_days: "{{ (ansible_uptime_seconds | int / 86400) | round(1) }}"
+      when: ansible_uptime_seconds is defined
+
+    - name: Show what was found
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }}
+          | booted {{ ansible_lastboot | default('?') }}
+          | up {{ uptime_days | default('?') }} days
+          | restart pending: {{ checks.pending_restart | default('?') }}
+          | {{ check_drive }} free: {{ checks.disk_free_gb | default('?') }} GB
+          | auto services stopped: {{ checks.auto_stopped_count | default('?') }}
+          | {{ checks.watched_services | default('') }}
+          | {{ checks.urls | default('') }}
+
+- name: Write the CSV report
+  hosts: windows
+  gather_facts: false
+  vars:
+    report_delimiter: ";"       # ';' opens cleanly in a French Excel, ',' is RFC 4180
+
+  tasks:
+
+    # One single call to `date`, reused everywhere. Asking for the time twice
+    # could give two different answers - a second apart, or a month apart on
+    # the last night of a month.
+    - name: Take the timestamp of this run
+      run_once: true
+      ansible.builtin.set_fact:
+        run_id: "{{ lookup('pipe', 'date +%Y%m%d-%H%M%S') }}"
+
+    - name: Take the YYYY-MM folder from that same timestamp
+      run_once: true
+      ansible.builtin.set_fact:
+        report_month: "{{ run_id[0:4] }}-{{ run_id[4:6] }}"
+
+    - name: Create reports/YYYY-MM/
+      run_once: true
+      delegate_to: localhost
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/reports/{{ report_month }}"
+        state: directory
+        mode: "0755"
+
+    - name: Write the CSV file
+      run_once: true
+      delegate_to: localhost
+      ansible.builtin.template:
+        src: report.csv.j2
+        dest: "{{ playbook_dir }}/reports/{{ report_month }}/health_{{ run_id }}.csv"
+        mode: "0644"
+
+    - name: Where the report is
+      run_once: true
+      ansible.builtin.debug:
+        msg: "Report written to reports/{{ report_month }}/health_{{ run_id }}.csv"

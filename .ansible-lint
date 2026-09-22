@@ -1,0 +1,12 @@
+---
+profile: production
+
+exclude_paths:
+  - collections/
+  - reports/
+
+skip_list:
+  # run_once is intentional for the report: one file, written once on the
+  # control node. The playbook does not use the "free" strategy, which is the
+  # case this rule warns about.
+  - run-once[task]

@@ -1,0 +1,80 @@
+{# Runs on each Windows server and prints ONE line of JSON.
+   Everything the facts do not provide is collected here. #}
+$ErrorActionPreference = 'Stop'
+$ProgressPreference    = 'SilentlyContinue'
+
+# --- settings coming from group_vars ---------------------------------------
+$drive    = '{{ check_drive | replace("'", "''") }}'
+$services = @({% for s in check_services %}'{{ s | replace("'", "''") }}'{{ ", " if not loop.last }}{% endfor %})
+$timeout  = {{ check_url_timeout }}
+
+# --- 1. Pending restart ----------------------------------------------------
+$reasons = @()
+if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') {
+    $reasons += 'Component Based Servicing'
+}
+if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') {
+    $reasons += 'Windows Update'
+}
+$sessionManager = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -ErrorAction SilentlyContinue
+if ($sessionManager.PendingFileRenameOperations) {
+    $reasons += 'Pending file rename'
+}
+$activeName  = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ActiveComputerName' -ErrorAction SilentlyContinue).ComputerName
+$pendingName = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName' -ErrorAction SilentlyContinue).ComputerName
+if ($activeName -and $pendingName -and $activeName -ne $pendingName) {
+    $reasons += 'Computer rename'
+}
+
+# --- 2. Automatic services that are not running ----------------------------
+$autoStopped = Get-CimInstance Win32_Service |
+    Where-Object { $_.StartMode -eq 'Auto' -and $_.State -ne 'Running' } |
+    ForEach-Object { $_.Name }
+
+# --- 3. The services we explicitly watch -----------------------------------
+$watched = foreach ($name in $services) {
+    $service = Get-Service -Name $name -ErrorAction SilentlyContinue
+    if ($service) { "$name=$($service.Status)" } else { "$name=not installed" }
+}
+
+# --- 4. Disk ---------------------------------------------------------------
+$disk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$drive'"
+
+# --- 5. URLs ---------------------------------------------------------------
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+{% if check_url_ignore_cert_errors %}
+# Internal servers often use self-signed certificates.
+[Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+{% endif %}
+
+$urlResults = @()
+{% for u in check_urls %}
+try {
+    $response = Invoke-WebRequest -Uri '{{ u.url | replace("'", "''") }}' -UseBasicParsing -TimeoutSec $timeout
+    $code = [int]$response.StatusCode
+{% if u.expect_content is defined %}
+    if ($response.Content -like '*{{ u.expect_content | replace("'", "''") }}*') {
+        $urlResults += '{{ u.name }}=' + $code + ' content found'
+    } else {
+        $urlResults += '{{ u.name }}=' + $code + ' content MISSING'
+    }
+{% else %}
+    $urlResults += '{{ u.name }}=' + $code
+{% endif %}
+} catch {
+    $urlResults += '{{ u.name }}=failed: ' + $_.Exception.Message
+}
+{% endfor %}
+
+# --- Output ----------------------------------------------------------------
+[ordered]@{
+    pending_restart    = if ($reasons.Count -gt 0) { 'yes' } else { 'no' }
+    pending_reasons    = ($reasons -join ' | ')
+    auto_stopped_count = @($autoStopped).Count
+    auto_stopped       = (@($autoStopped) -join ' | ')
+    watched_services   = (@($watched) -join ' | ')
+    disk_total_gb      = if ($disk) { [math]::Round($disk.Size / 1GB, 1) } else { '' }
+    disk_free_gb       = if ($disk) { [math]::Round($disk.FreeSpace / 1GB, 1) } else { '' }
+    disk_free_pct      = if ($disk -and $disk.Size -gt 0) { [math]::Round($disk.FreeSpace / $disk.Size * 100, 1) } else { '' }
+    urls               = (@($urlResults) -join ' | ')
+} | ConvertTo-Json -Compress

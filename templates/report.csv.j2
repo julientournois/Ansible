@@ -1,0 +1,12 @@
+{#- One row per server. Values are reported as they are, nothing is graded. -#}
+{%- set d = report_delimiter -%}
+{#- Wrap every field in quotes and double any quote inside it (RFC 4180). -#}
+{%- macro cell(value) -%}
+"{{ value | string | replace('"', '""') }}"
+{%- endmacro -%}
+server{{ d }}checked_at{{ d }}os{{ d }}last_boot{{ d }}uptime_days{{ d }}pending_restart{{ d }}pending_reasons{{ d }}auto_services_stopped_count{{ d }}auto_services_stopped{{ d }}watched_services{{ d }}disk_total_gb{{ d }}disk_free_gb{{ d }}disk_free_pct{{ d }}urls
+{% for host in ansible_play_hosts_all | sort %}
+{%- set f = hostvars[host] -%}
+{%- set c = f.checks | default({}) -%}
+{{ cell(host) }}{{ d }}{{ cell(run_id) }}{{ d }}{{ cell(f.ansible_distribution | default('not reachable')) }}{{ d }}{{ cell(f.ansible_lastboot | default('')) }}{{ d }}{{ cell(f.uptime_days | default('')) }}{{ d }}{{ cell(c.pending_restart | default('')) }}{{ d }}{{ cell(c.pending_reasons | default('')) }}{{ d }}{{ cell(c.auto_stopped_count | default('')) }}{{ d }}{{ cell(c.auto_stopped | default('')) }}{{ d }}{{ cell(c.watched_services | default('')) }}{{ d }}{{ cell(c.disk_total_gb | default('')) }}{{ d }}{{ cell(c.disk_free_gb | default('')) }}{{ d }}{{ cell(c.disk_free_pct | default('')) }}{{ d }}{{ cell(c.urls | default('')) }}
+{% endfor %}
