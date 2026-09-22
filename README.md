@@ -10,35 +10,37 @@ Nothing is changed on the servers.
 
 ## What it collects
 
-| Item | Where it comes from |
+One task per item, so the playbook output tells you exactly which check ran
+and which one had a problem.
+
+| Item | Task |
 |---|---|
-| Last reboot time | fact `ansible_lastboot` |
-| Uptime | fact `ansible_uptime_seconds` |
-| OS name | fact `ansible_distribution` |
-| Pending restart (+ reasons) | PowerShell, registry |
-| Automatic services not running | PowerShell, `Win32_Service` |
-| Named services you watch | PowerShell, `Get-Service` |
-| `C:` size, free space, free % | PowerShell, `Win32_LogicalDisk` |
-| URL checks (+ content) | PowerShell, `Invoke-WebRequest`, from the server |
+| Uptime, OS name | `gather_facts` (`ansible_uptime_seconds`, `ansible_distribution`) |
+| Last reboot time, pending restart (+ reasons) | `win_reboot_info` |
+| Automatic services not running | `win_powershell`, `Win32_Service` |
+| Named services you watch | `win_powershell`, `Get-Service` |
+| `C:` size, free space, free % | `win_powershell`, `Win32_LogicalDisk` |
+| URL checks (+ content) | `win_uri`, called from the server |
 
 There is no Windows fact for disk space, which is why the drive goes through
-PowerShell like the rest.
+`win_powershell`.
+
+Each gathering task carries `failed_when: false`. A check that fails costs you
+that one column, not the whole server: the task shows up red in the output and
+the column comes out **empty** in the CSV. Empty means "not checked" — the
+report never fills a blank with a reassuring `no` or `0`.
 
 ## Files
 
 ```
-windows_health_check.yml     the playbook
-files/checks.ps1             the PowerShell run on each server
+windows_health_check.yml     the playbook, everything is in here
 templates/report.csv.j2      the CSV layout
 group_vars/windows.yml       what to watch: services, URLs, drive
 ```
 
-`files/checks.ps1` is a plain PowerShell script, not a template. The playbook
-runs it with `ansible.windows.win_powershell`, which hands your settings to
-its `param()` block as real parameters and reads the result back from
-`$Ansible.Result`. Nothing is pasted into the script text, so no value ever
-needs escaping, and the file stays a normal `.ps1` you can open, edit and run
-in a PowerShell console on its own.
+The PowerShell is inline in the tasks, and values reach it through
+`parameters:`, bound to a `param()` block. Nothing is pasted into the script
+text, so no value ever needs escaping.
 
 Your own `ansible.cfg` and your inventory `.ini` stay where they are. The
 playbook only expects a group of Windows servers.
@@ -104,6 +106,32 @@ report.
 
 ## Requirements
 
-- the `ansible.windows` collection (1.5.0 or newer, for `win_powershell`)
+- the `ansible.windows` collection, **3.8.0 or newer**
 - SSH or WinRM already working against the servers (this playbook does not
   configure the connection — that stays in your inventory)
+
+Check what you have:
+
+```bash
+ansible-galaxy collection list ansible.windows
+```
+
+3.8.0 is required only for `win_reboot_info`, which is recent. If you are
+stuck on an older collection, replace that one task with:
+
+```yaml
+    - name: Check whether a restart is pending
+      ansible.windows.win_powershell:
+        script: |
+          $Ansible.Changed = $false
+          $reasons = @()
+          if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') { $reasons += 'CBS' }
+          if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') { $reasons += 'WindowsUpdate' }
+          $Ansible.Result = @{ required = $reasons.Count -gt 0; reasons = $reasons }
+      register: reboot
+      failed_when: false
+```
+
+and read `reboot.result.required` / `reboot.result.reasons` in the assembling
+task instead, plus `ansible_lastboot` from the facts for the boot time. Then
+`win_powershell` alone is enough, and that goes back to 1.5.0.
