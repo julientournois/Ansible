@@ -70,7 +70,13 @@
           }
           $Ansible.Result = @{ not_running = $notRunning }
         parameters:
-          Names: "{{ check_services | default([]) }}"
+          # The baseline every server watches, plus whatever this one adds.
+          # Ansible replaces lists, it never merges them, so without this a
+          # server declaring check_services would silently lose the common
+          # ones. unique keeps a name listed in both from showing up twice.
+          Names: >-
+            {{ ((check_services_common | default([])) + (check_services | default([])))
+               | unique | list }}
       register: watched_services
       failed_when: false
 

@@ -80,8 +80,7 @@ host_vars/
 
 ```yaml
 # host_vars/SRV-WEB-01.yml
-check_services:            # checked by name, whatever their start mode
-  - Winmgmt
+check_services:            # this server's own, added to check_services_common
   - W3SVC
 
 check_services_ignore:     # left out of the "automatic but not running" list
@@ -112,6 +111,35 @@ happening.
 A `default()` is only a fallback for a name that is undefined. It has no
 precedence and never overrides a value you set in `group_vars` or
 `host_vars`.
+
+### A baseline every server watches
+
+`check_services_common` in `group_vars/all.yml` is watched everywhere;
+`check_services` in `host_vars` is what one server adds on top. The two are
+concatenated, and a name listed in both is only reported once.
+
+```yaml
+# group_vars/all.yml
+check_services_common:
+  - Winmgmt
+  - Schedule
+
+# host_vars/SRV-SQL-01.yml
+check_services:
+  - MSSQLSERVER
+```
+
+`SRV-SQL-01` then watches `Winmgmt`, `Schedule` and `MSSQLSERVER`.
+
+This exists because **Ansible replaces lists, it never merges them**. Putting
+the common services in `check_services` inside `group_vars/all.yml` looks like
+it should work, but any server declaring its own `check_services` would
+silently lose them — no error, no warning, just a service quietly no longer
+watched.
+
+The same trap still applies to `check_services_ignore` and `check_urls`: a
+server that sets either one replaces the global list rather than adding to it.
+Say so if you want the same treatment there.
 
 ### Excluding noisy services
 

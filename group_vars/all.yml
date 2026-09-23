@@ -14,7 +14,14 @@ check_drive: "C:"
 
 # Empty by default, so a server with no host_vars file of its own still runs -
 # it simply reports nothing for these two.
+# Watched by every server, on top of whatever each one declares for itself in
+# check_services. The two lists are concatenated, so a server can add to this
+# baseline without losing it.
+check_services_common: []
+
+# Per-server default. Normally set in host_vars/<SERVER>.yml, not here.
 check_services: []
+
 check_urls: []
 
 # Services left out of the "automatic but not running" list. Matched on the
